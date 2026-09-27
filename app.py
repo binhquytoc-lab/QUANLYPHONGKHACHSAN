@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
-st.image("logo.jpg")
+st.image("VT.jpg")
 MAX_ROOMS = 100      # Giới hạn tối đa số phòng có thể quản lý
 DEFAULT_ROOMS = 20   # Số phòng mặc định khi khởi động ứng dụng
 
