@@ -247,4 +247,177 @@ def main():
             submitted = st.form_submit_button("⚙️ Áp dụng thiết lập")
             if submitted:
                 replace = mode.startswith("Tạo mới")
-                if not replace and len(st.session_state.rooms) + room_count >
+                if not replace and len(st.session_state.rooms) + room_count > MAX_ROOMS:
+                    st.error(
+                        f"Không thể thêm {room_count} phòng vì tổng số phòng sẽ vượt quá {MAX_ROOMS}. "
+                        f"Hiện có {len(st.session_state.rooms)} phòng, chỉ có thể thêm tối đa {MAX_ROOMS - len(st.session_state.rooms)} phòng."
+                    )
+                else:
+                    created = generate_rooms(room_count, start_number, default_type, default_price, replace=replace)
+                    st.success(f"Đã thiết lập {created} phòng thành công (đánh số từ {start_number}).")
+                    st.rerun()
+
+        st.info(f"Hiện tại đang quản lý **{len(st.session_state.rooms)}/{MAX_ROOMS}** phòng.")
+
+    # ---------------- TAB: DANH SÁCH PHÒNG ----------------
+    with tab_rooms:
+        st.subheader("Danh sách phòng")
+        rooms_df = rooms_dataframe()
+
+        filter_status = st.selectbox("Lọc theo trạng thái", ["Tất cả"] + ROOM_STATUSES)
+        display_df = rooms_df if (filter_status == "Tất cả" or rooms_df.empty) else rooms_df[rooms_df["status"] == filter_status]
+
+        if display_df.empty:
+            st.info("Không có phòng nào phù hợp.")
+        else:
+            st.dataframe(
+                display_df[["room_number", "room_type", "price", "status", "note"]].rename(
+                    columns={
+                        "room_number": "Số phòng",
+                        "room_type": "Loại phòng",
+                        "price": "Giá (VNĐ/đêm)",
+                        "status": "Trạng thái",
+                        "note": "Ghi chú",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.divider()
+        st.subheader("Cập nhật / Xóa phòng")
+        if not rooms_df.empty:
+            room_options = {f"Phòng {r['room_number']} ({r['room_type']})": r["id"] for _, r in rooms_df.iterrows()}
+            selected_label = st.selectbox("Chọn phòng", list(room_options.keys()))
+            selected_id = room_options[selected_label]
+            room_row = find_room(selected_id)
+
+            with st.form("edit_room_form"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    new_number = st.text_input("Số phòng", value=room_row["room_number"])
+                    new_type = st.selectbox(
+                        "Loại phòng", ROOM_TYPES,
+                        index=ROOM_TYPES.index(room_row["room_type"]) if room_row["room_type"] in ROOM_TYPES else 0,
+                    )
+                with c2:
+                    new_price = st.number_input("Giá/đêm (VNĐ)", min_value=0.0, value=float(room_row["price"]), step=50000.0)
+                    new_status = st.selectbox("Trạng thái", ROOM_STATUSES, index=ROOM_STATUSES.index(room_row["status"]))
+                new_note = st.text_area("Ghi chú", value=room_row["note"] or "")
+
+                col_save, col_delete = st.columns(2)
+                submitted = col_save.form_submit_button("💾 Lưu thay đổi", use_container_width=True)
+                deleted = col_delete.form_submit_button("🗑️ Xóa phòng", use_container_width=True)
+
+                if submitted:
+                    ok, msg = update_room(selected_id, new_number.strip(), new_type, new_price, new_status, new_note)
+                    st.success(msg) if ok else st.error(msg)
+                    if ok:
+                        st.rerun()
+
+                if deleted:
+                    delete_room(selected_id)
+                    st.success("Đã xóa phòng.")
+                    st.rerun()
+        else:
+            st.info("Chưa có phòng nào để chỉnh sửa.")
+
+    # ---------------- TAB: THÊM PHÒNG ----------------
+    with tab_add_room:
+        st.subheader("Thêm phòng mới")
+        st.caption(f"Đang có {len(st.session_state.rooms)}/{MAX_ROOMS} phòng.")
+
+        if len(st.session_state.rooms) >= MAX_ROOMS:
+            st.warning(f"Đã đạt giới hạn tối đa {MAX_ROOMS} phòng. Vui lòng xóa bớt phòng hoặc dùng tab '⚙️ Thiết lập số phòng' để tạo lại.")
+
+        with st.form("add_room_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                room_number = st.text_input("Số phòng (VD: 101)")
+                room_type = st.selectbox("Loại phòng", ROOM_TYPES)
+            with c2:
+                price = st.number_input("Giá/đêm (VNĐ)", min_value=0.0, step=50000.0, value=500000.0)
+                status = st.selectbox("Trạng thái ban đầu", ROOM_STATUSES)
+            note = st.text_area("Ghi chú (tùy chọn)")
+
+            submitted = st.form_submit_button("➕ Thêm phòng", disabled=len(st.session_state.rooms) >= MAX_ROOMS)
+            if submitted:
+                if not room_number.strip():
+                    st.error("Vui lòng nhập số phòng.")
+                else:
+                    ok, msg = add_room(room_number.strip(), room_type, price, status, note)
+                    st.success(msg) if ok else st.error(msg)
+
+    # ---------------- TAB: ĐẶT PHÒNG / TRẢ PHÒNG ----------------
+    with tab_booking:
+        st.subheader("Đặt phòng mới")
+        rooms_df = rooms_dataframe()
+        available_rooms = rooms_df[rooms_df["status"] == "Trống"] if not rooms_df.empty else rooms_df
+
+        if available_rooms.empty:
+            st.warning("Hiện không có phòng trống nào.")
+        else:
+            with st.form("booking_form", clear_on_submit=True):
+                room_options = {
+                    f"Phòng {r['room_number']} ({r['room_type']}) - {r['price']:,.0f}đ/đêm": r["id"]
+                    for _, r in available_rooms.iterrows()
+                }
+                selected_label = st.selectbox("Chọn phòng", list(room_options.keys()))
+                guest_name = st.text_input("Tên khách hàng")
+                phone = st.text_input("Số điện thoại")
+                c1, c2 = st.columns(2)
+                check_in = c1.date_input("Ngày nhận phòng", value=date.today())
+                check_out = c2.date_input("Ngày trả phòng", value=date.today())
+
+                submitted = st.form_submit_button("📅 Đặt phòng")
+                if submitted:
+                    if not guest_name.strip():
+                        st.error("Vui lòng nhập tên khách hàng.")
+                    elif check_out <= check_in:
+                        st.error("Ngày trả phòng phải sau ngày nhận phòng.")
+                    else:
+                        add_booking(room_options[selected_label], guest_name.strip(), phone.strip(), check_in, check_out)
+                        st.success("Đặt phòng thành công!")
+                        st.rerun()
+
+        st.divider()
+        st.subheader("Trả phòng")
+        active_df = bookings_dataframe(active_only=True)
+        if active_df.empty:
+            st.info("Không có phòng nào đang được sử dụng.")
+        else:
+            for _, b in active_df.iterrows():
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([3, 2, 1])
+                    c1.markdown(f"**Phòng {b['room_number']}** — {b['guest_name']} ({b['phone']})")
+                    c2.markdown(f"Nhận: {b['check_in']} → Trả: {b['check_out']}")
+                    if c3.button("✅ Trả phòng", key=f"checkout_{b['id']}"):
+                        checkout_booking(b["id"], b["room_id"])
+                        st.success(f"Đã trả phòng {b['room_number']}.")
+                        st.rerun()
+
+    # ---------------- TAB: LỊCH SỬ ----------------
+    with tab_history:
+        st.subheader("Lịch sử đặt phòng")
+        history_df = bookings_dataframe()
+        if history_df.empty:
+            st.info("Chưa có lịch sử đặt phòng.")
+        else:
+            st.dataframe(
+                history_df[["room_number", "guest_name", "phone", "check_in", "check_out", "status"]].rename(
+                    columns={
+                        "room_number": "Số phòng",
+                        "guest_name": "Khách hàng",
+                        "phone": "SĐT",
+                        "check_in": "Nhận phòng",
+                        "check_out": "Trả phòng",
+                        "status": "Trạng thái",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+
+if __name__ == "__main__":
+    main()
