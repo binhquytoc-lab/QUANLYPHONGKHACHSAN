@@ -182,9 +182,8 @@ def main():
     st.set_page_config(page_title="Quản lý Khách sạn", page_icon="🏨", layout="wide")
     init_state()
 
-    st.title("🏨 Hệ thống Quản lý Phòng Khách sạn")
+    st.title("🏨 Hệ thống Quản lý Phòng Khách sạn_DR BÌNH")
     st.caption(
-        f"⚠️ Dữ liệu chỉ được lưu tạm trong phiên làm việc này — tải lại trang sẽ mất dữ liệu. "
         f"Mặc định **{DEFAULT_ROOMS} phòng**, quản lý tối đa **{MAX_ROOMS} phòng**."
     )
 
