@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime
 
-MAX_ROOMS = 100  # Giới hạn tối đa số phòng có thể quản lý
+MAX_ROOMS = 100      # Giới hạn tối đa số phòng có thể quản lý
+DEFAULT_ROOMS = 20   # Số phòng mặc định khi khởi động ứng dụng
 
 ROOM_STATUSES = ["Trống", "Đang sử dụng", "Đang dọn dẹp", "Bảo trì"]
 ROOM_TYPES = ["Đơn", "Đôi", "Suite", "Gia đình", "VIP"]
@@ -14,19 +15,26 @@ STATUS_ICON = {
 }
 
 
-# ----------------------------- KHỞI TẠO DỮ LIỆU MẪU -----------------------------
+# ----------------------------- KHỞI TẠO DỮ LIỆU MẶC ĐỊNH -----------------------------
 
 def init_state():
     if "rooms" not in st.session_state:
+        # Mặc định tạo sẵn DEFAULT_ROOMS phòng, đánh số bắt đầu từ 101
         st.session_state.rooms = [
-            {"id": 1, "room_number": "101", "room_type": "Đơn", "price": 400000, "status": "Trống", "note": ""},
-            {"id": 2, "room_number": "102", "room_type": "Đôi", "price": 600000, "status": "Trống", "note": ""},
-            {"id": 3, "room_number": "201", "room_type": "Suite", "price": 1200000, "status": "Bảo trì", "note": "Đang sửa máy lạnh"},
+            {
+                "id": i + 1,
+                "room_number": str(101 + i),
+                "room_type": "Đơn",
+                "price": 400000,
+                "status": "Trống",
+                "note": "",
+            }
+            for i in range(DEFAULT_ROOMS)
         ]
     if "bookings" not in st.session_state:
         st.session_state.bookings = []
     if "next_room_id" not in st.session_state:
-        st.session_state.next_room_id = 4
+        st.session_state.next_room_id = DEFAULT_ROOMS + 1
     if "next_booking_id" not in st.session_state:
         st.session_state.next_booking_id = 1
 
@@ -177,7 +185,7 @@ def main():
     st.title("🏨 Hệ thống Quản lý Phòng Khách sạn")
     st.caption(
         f"⚠️ Dữ liệu chỉ được lưu tạm trong phiên làm việc này — tải lại trang sẽ mất dữ liệu. "
-        f"Hệ thống quản lý tối đa **{MAX_ROOMS} phòng**."
+        f"Mặc định **{DEFAULT_ROOMS} phòng**, quản lý tối đa **{MAX_ROOMS} phòng**."
     )
 
     tab_dashboard, tab_setup, tab_rooms, tab_add_room, tab_booking, tab_history = st.tabs(
@@ -231,7 +239,10 @@ def main():
             c1, c2 = st.columns(2)
             with c1:
                 room_count = st.number_input(
-                    "Số lượng phòng", min_value=1, max_value=MAX_ROOMS, value=min(len(st.session_state.rooms) or 10, MAX_ROOMS)
+                    "Số lượng phòng",
+                    min_value=1,
+                    max_value=MAX_ROOMS,
+                    value=min(len(st.session_state.rooms) or DEFAULT_ROOMS, MAX_ROOMS),
                 )
                 start_number = st.number_input("Số phòng bắt đầu (VD: 101)", min_value=1, value=101, step=1)
             with c2:
